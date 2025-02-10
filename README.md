@@ -1,1 +1,1 @@
-réer une classe ,son cours et ces exercices 
+créer une classe ,son cours et ces exercices 
