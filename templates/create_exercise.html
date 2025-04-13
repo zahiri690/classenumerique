@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+
+{% block title %}Créer un exercice{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Créer un nouvel exercice</h2>
+    
+    <form method="POST" action="{{ url_for('create_exercise') }}" enctype="multipart/form-data" id="exerciseForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        {{ form.csrf_token if form }}
+        <div class="mb-3">
+            <label for="title" class="form-label">Titre</label>
+            <input type="text" class="form-control" id="title" name="title" required>
+        </div>
+        
+        <div class="mb-3">
+            <label for="description" class="form-label">Description</label>
+            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+        </div>
+        
+        <div class="mb-3">
+            <label for="exercise_type" class="form-label">Type d'exercice</label>
+            <select class="form-select" id="exercise_type" name="exercise_type" required>
+                <option value="">Choisir un type d'exercice</option>
+                {% for type_code, type_name in exercise_types %}
+                <option value="{{ type_code }}">{{ type_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="max_attempts" class="form-label">Nombre maximum de tentatives</label>
+            <input type="number" class="form-control" id="max_attempts" name="max_attempts" value="3" min="1" required>
+            <small class="form-text text-muted">Nombre de fois qu'un élève peut essayer cet exercice</small>
+        </div>
+
+        <!-- Section QCM -->
+        <div id="qcm_section" class="exercise-type-section" style="display: none;">
+            <div class="questions-container">
+                <div class="question-block mb-4" data-question-index="0">
+                    <h4>Question 1</h4>
+                    <div class="mb-3">
+                        <label class="form-label">Question</label>
+                        <input type="text" class="form-control" name="questions[0][question]" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Options</label>
+                        <div class="options-container">
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" name="questions[0][options][]" required>
+                                <div class="input-group-text">
+                                    <input type="radio" name="questions[0][correct]" value="0" required>
+                                </div>
+                                <button type="button" class="btn btn-danger remove-option">×</button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm add-option">
+                            <i class="fas fa-plus"></i> Ajouter une option
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="btn btn-secondary add-question">
+                <i class="fas fa-plus"></i> Ajouter une question
+            </button>
+        </div>
+
+        <!-- Section Mots mêlés -->
+        <div id="word_search_section" class="exercise-type-section" style="display: none;">
+            <div class="mb-3">
+                <label class="form-label">Mots à trouver</label>
+                <textarea class="form-control" name="words" rows="3" placeholder="Entrez les mots séparés par des virgules" required></textarea>
+                <small class="form-text text-muted">Séparez les mots par des virgules (exemple : chat, chien, oiseau)</small>
+            </div>
+        </div>
+
+        <!-- Section Association de paires -->
+        <div id="pairs_section" class="exercise-type-section" style="display: none;">
+            <div class="pairs-container">
+                <div class="pair-block mb-3">
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Élément 1</label>
+                            <input type="text" class="form-control" name="pairs[0][first]" required>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Élément 2</label>
+                            <input type="text" class="form-control" name="pairs[0][second]" required>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="btn btn-secondary add-pair">
+                <i class="fas fa-plus"></i> Ajouter une paire
+            </button>
+        </div>
+
+        <!-- Section Texte à trous -->
+        <div id="fill_in_blanks_section" class="exercise-type-section" style="display: none;">
+            <div class="mb-3">
+                <label class="form-label">Texte avec trous</label>
+                <textarea class="form-control" name="text" rows="5" placeholder="Entrez le texte en utilisant [...] pour les trous. Exemple : Le [...] est un animal." required></textarea>
+                <small class="form-text text-muted">Utilisez [...] pour marquer les trous dans le texte</small>
+                <div id="preview_holes" class="mt-2"></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Réponses</label>
+                <textarea class="form-control" name="answers" rows="3" placeholder="Entrez les réponses dans l'ordre, séparées par des virgules" required></textarea>
+                <small class="form-text text-muted">Les réponses doivent être dans le même ordre que les trous</small>
+                <div id="preview_answers" class="mt-2"></div>
+            </div>
+        </div>
+
+        <!-- Section Dépôt de fichier -->
+        <div id="file_section" class="exercise-type-section" style="display: none;">
+            <div class="mb-3">
+                <label class="form-label">Instructions</label>
+                <textarea class="form-control" name="instructions" rows="3" placeholder="Entrez les instructions pour le dépôt de fichier" required></textarea>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> Créer l'exercice
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="window.history.back()">
+                <i class="fas fa-times"></i> Annuler
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const exerciseForm = document.getElementById('exerciseForm');
+    const exerciseType = document.getElementById('exercise_type');
+    
+    // Fonction pour ajouter les écouteurs d'événements aux boutons d'options
+    function setupOptionButtons() {
+        document.querySelectorAll('.add-option').forEach(button => {
+            // Supprimer l'ancien écouteur s'il existe
+            button.removeEventListener('click', addOptionHandler);
+            // Ajouter le nouvel écouteur
+            button.addEventListener('click', addOptionHandler);
+        });
+    }
+
+    // Gestionnaire pour l'ajout d'option
+    function addOptionHandler() {
+        const optionsContainer = this.closest('.mb-3').querySelector('.options-container');
+        const questionIndex = this.closest('.question-block').dataset.questionIndex;
+        const optionsCount = optionsContainer.children.length;
+        
+        const newOption = document.createElement('div');
+        newOption.className = 'input-group mb-2';
+        newOption.innerHTML = `
+            <input type="text" class="form-control" name="questions[${questionIndex}][options][]" required>
+            <div class="input-group-text">
+                <input type="radio" name="questions[${questionIndex}][correct]" value="${optionsCount}" required>
+            </div>
+            <button type="button" class="btn btn-danger remove-option">×</button>
+        `;
+        
+        optionsContainer.appendChild(newOption);
+    }
+
+    // Fonction pour afficher/masquer les sections
+    function toggleSections() {
+        const selectedType = exerciseType.value;
+        document.querySelectorAll('.exercise-type-section').forEach(section => {
+            section.style.display = 'none';
+            // Désactiver les champs required
+            section.querySelectorAll('[required]').forEach(field => {
+                field.removeAttribute('required');
+            });
+        });
+        
+        if (selectedType) {
+            const selectedSection = document.getElementById(selectedType + '_section');
+            if (selectedSection) {
+                selectedSection.style.display = 'block';
+                // Réactiver les champs required
+                selectedSection.querySelectorAll('[data-required]').forEach(field => {
+                    field.setAttribute('required', '');
+                });
+            }
+        }
+    }
+    
+    // Marquer les champs initialement requis
+    document.querySelectorAll('.exercise-type-section [required]').forEach(field => {
+        field.setAttribute('data-required', '');
+    });
+    
+    // Écouter les changements de type d'exercice
+    exerciseType.addEventListener('change', toggleSections);
+    
+    // Initialiser l'affichage
+    toggleSections();
+
+    // Initialiser les écouteurs pour les boutons d'options existants
+    setupOptionButtons();
+
+    // Gestion de la suppression des options
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-option')) {
+            const optionDiv = e.target.closest('.input-group');
+            const optionsContainer = optionDiv.parentElement;
+            const questionBlock = optionsContainer.closest('.question-block');
+            const questionIndex = questionBlock.dataset.questionIndex;
+            
+            // Ne pas supprimer si c'est la dernière option
+            if (optionsContainer.children.length > 1) {
+                optionDiv.remove();
+                
+                // Mettre à jour les valeurs des boutons radio
+                const options = optionsContainer.children;
+                for (let i = 0; i < options.length; i++) {
+                    const radio = options[i].querySelector('input[type="radio"]');
+                    radio.value = i;
+                }
+            }
+        }
+    });
+
+    // Gestion de l'ajout de questions
+    document.querySelector('.add-question').addEventListener('click', function() {
+        const questionsContainer = document.querySelector('.questions-container');
+        const questionCount = questionsContainer.children.length;
+        const newQuestionBlock = document.createElement('div');
+        newQuestionBlock.className = 'question-block mb-4';
+        newQuestionBlock.dataset.questionIndex = questionCount;
+        
+        newQuestionBlock.innerHTML = `
+            <h4>Question ${questionCount + 1}</h4>
+            <div class="mb-3">
+                <label class="form-label">Question</label>
+                <input type="text" class="form-control" name="questions[${questionCount}][question]" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Options</label>
+                <div class="options-container">
+                    <div class="input-group mb-2">
+                        <input type="text" class="form-control" name="questions[${questionCount}][options][]" required>
+                        <div class="input-group-text">
+                            <input type="radio" name="questions[${questionCount}][correct]" value="0" required>
+                        </div>
+                        <button type="button" class="btn btn-danger remove-option">×</button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm add-option">
+                    <i class="fas fa-plus"></i> Ajouter une option
+                </button>
+            </div>
+        `;
+        
+        questionsContainer.appendChild(newQuestionBlock);
+        // Ajouter les écouteurs aux nouveaux boutons d'options
+        setupOptionButtons();
+    });
+    
+    // Validation du formulaire
+    exerciseForm.addEventListener('submit', function(e) {
+        const selectedType = exerciseType.value;
+        if (!selectedType) {
+            e.preventDefault();
+            alert('Veuillez sélectionner un type d\'exercice');
+            return;
+        }
+        
+        const selectedSection = document.getElementById(selectedType + '_section');
+        if (selectedSection) {
+            const requiredFields = selectedSection.querySelectorAll('[required]');
+            let isValid = true;
+            
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    isValid = false;
+                    field.classList.add('is-invalid');
+                } else {
+                    field.classList.remove('is-invalid');
+                }
+            });
+            
+            if (!isValid) {
+                e.preventDefault();
+                alert('Veuillez remplir tous les champs obligatoires');
+            }
+        }
+    });
+
+    // Fonction pour mettre à jour l'aperçu des trous
+    function updateHolesPreview() {
+        const textArea = document.querySelector('#fill_in_blanks_section textarea[name="text"]');
+        const previewDiv = document.querySelector('#preview_holes');
+        if (textArea && previewDiv) {
+            const text = textArea.value;
+            const holes = text.match(/\[...\]/g);
+            previewDiv.innerHTML = holes ? 
+                `<small class="text-info">Nombre de trous trouvés : ${holes.length}</small>` :
+                '<small class="text-warning">Aucun trou trouvé. Utilisez [...] pour marquer les trous.</small>';
+        }
+    }
+
+    // Fonction pour mettre à jour l'aperçu des réponses
+    function updateAnswersPreview() {
+        const answersArea = document.querySelector('#fill_in_blanks_section textarea[name="answers"]');
+        const previewDiv = document.querySelector('#preview_answers');
+        if (answersArea && previewDiv) {
+            const answers = answersArea.value.split(',').filter(a => a.trim());
+            previewDiv.innerHTML = answers.length > 0 ?
+                `<small class="text-info">Nombre de réponses : ${answers.length}</small>` :
+                '<small class="text-warning">Aucune réponse. Entrez les réponses séparées par des virgules.</small>';
+        }
+    }
+
+    // Ajouter les écouteurs d'événements pour les aperçus
+    const fillInBlanksSection = document.querySelector('#fill_in_blanks_section');
+    if (fillInBlanksSection) {
+        const textArea = fillInBlanksSection.querySelector('textarea[name="text"]');
+        const answersArea = fillInBlanksSection.querySelector('textarea[name="answers"]');
+        
+        if (textArea) {
+            textArea.addEventListener('input', updateHolesPreview);
+            // Initialiser l'aperçu
+            updateHolesPreview();
+        }
+        
+        if (answersArea) {
+            answersArea.addEventListener('input', updateAnswersPreview);
+            // Initialiser l'aperçu
+            updateAnswersPreview();
+        }
+    }
+});
+</script>
+{% endblock %}

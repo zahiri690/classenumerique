@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.pairs-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.pairs-exercise {
+    margin: 30px 0;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 20px;
+}
+
+.pairs-columns {
+    display: grid;
+    grid-template-columns: 5fr 100px 5fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.pairs-column {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.pairs-header {
+    background: #f8f9fa;
+    padding: 12px 15px;
+    border-radius: 8px;
+    font-weight: 600;
+    color: #2c3e50;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.pairs-items {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.pair-item {
+    background: #ffffff;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 12px 15px;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 1.1em;
+    color: #2c3e50;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.pair-item:hover {
+    border-color: #2196f3;
+    transform: translateY(-2px);
+    box-shadow: 0 3px 6px rgba(33,150,243,0.1);
+}
+
+.pair-item.selected {
+    border-color: #2196f3;
+    background-color: #e3f2fd;
+}
+
+.pair-item.matched {
+    border-color: #4caf50;
+    background-color: #f1f8e9;
+    cursor: default;
+}
+
+.pairs-lines {
+    position: relative;
+    height: 100%;
+    min-height: 300px;
+}
+
+.connection-line {
+    position: absolute;
+    height: 3px;
+    background-color: #2196f3;
+    transform-origin: left center;
+    transition: all 0.2s ease;
+    z-index: 1;
+}
+
+.connection-line.correct {
+    background-color: #4caf50;
+    height: 4px;
+}
+
+.connection-line.incorrect {
+    background-color: #f44336;
+    height: 4px;
+}
+
+@media (max-width: 768px) {
+    .pairs-columns {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    .pairs-lines {
+        display: none;
+    }
+}
+
+.btn-primary {
+    background-color: #2196f3;
+    border-color: #2196f3;
+    padding: 12px 30px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn-primary:hover {
+    background-color: #1976d2;
+    border-color: #1976d2;
+}
+</style>
+<div class="container mt-4">
+    <div class="mb-4">
+        <a href="{{ url_for('teacher_dashboard') }}" class="btn btn-outline-primary">
+            <i class="fas fa-arrow-left"></i> Retour au tableau de bord
+        </a>
+    </div>
+
+    {% if content and content.left_items %}
+    <div class="pairs-container">
+        <form method="POST" action="{{ url_for('submit_exercise_answer', exercise_id=exercise.id) }}">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2>{{ exercise.title }}</h2>
+                {% if current_user.id == exercise.teacher_id %}
+                <div>
+                    <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-primary">
+                        <i class="fas fa-edit"></i> Modifier
+                    </a>
+                    <button type="button" class="btn btn-danger" data-exercise-id="{{ exercise.id }}" onclick="deleteExercise(this.dataset.exerciseId)">
+                        <i class="fas fa-trash"></i> Supprimer
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div id="pairsInputs"></div>
+
+            <div class="pairs-exercise">
+                <div class="pairs-columns">
+                    <div class="pairs-column">
+                        <div class="pairs-header">Éléments de gauche</div>
+                        <div class="pairs-items" id="leftItems">
+                            {% for item in content.left_items %}
+                                <div class="pair-item" data-index="{{ loop.index0 }}">
+                                    {{ item }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="pairs-lines" id="connectionLines"></div>
+
+                    <div class="pairs-column">
+                        <div class="pairs-header">Éléments de droite</div>
+                        <div class="pairs-items" id="rightItems">
+                            {% for item in content.right_items|shuffle %}
+                                <div class="pair-item" data-index="{{ loop.index0 }}">
+                                    {{ item }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+
+            {% if not attempt %}
+                <div class="text-center mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
+                        <i class="fas fa-check"></i> Valider mes réponses
+                    </button>
+                </div>
+            {% endif %}
+        </form>
+    </div>
+{% else %}
+    <div class="alert alert-warning">
+        Aucun élément n'a été défini pour cet exercice.
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function deleteExercise(exerciseId) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer cet exercice ?')) {
+        fetch(`/delete_exercise/${exerciseId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.href = '/exercises';
+            } else {
+                alert('Erreur lors de la suppression de l\'exercice');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Erreur lors de la suppression de l\'exercice');
+        });
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const leftItems = document.querySelectorAll('#leftItems .pair-item');
+    const rightItems = document.querySelectorAll('#rightItems .pair-item');
+    const submitBtn = document.getElementById('submitBtn');
+    const pairsInputs = document.getElementById('pairsInputs');
+    const connectionLines = document.getElementById('connectionLines');
+    
+    let selectedLeft = null;
+    let matches = [];
+
+    function drawLines() {
+        connectionLines.innerHTML = '';
+        matches.forEach(match => {
+            const leftItem = leftItems[match.left];
+            const rightItem = rightItems[match.right];
+            
+            const leftRect = leftItem.getBoundingClientRect();
+            const rightRect = rightItem.getBoundingClientRect();
+            const linesRect = connectionLines.getBoundingClientRect();
+            
+            const line = document.createElement('div');
+            line.className = 'connection-line';
+            
+            const x1 = 0;
+            const y1 = leftRect.top + leftRect.height/2 - linesRect.top;
+            const x2 = linesRect.width;
+            const y2 = rightRect.top + rightRect.height/2 - linesRect.top;
+            
+            const length = Math.sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1));
+            const angle = Math.atan2(y2-y1, x2-x1) * 180 / Math.PI;
+            
+            line.style.width = `${length}px`;
+            line.style.transform = `rotate(${angle}deg)`;
+            line.style.top = `${y1}px`;
+            line.style.left = `${x1}px`;
+            
+            connectionLines.appendChild(line);
+        });
+    }
+
+    function updateMatches() {
+        leftItems.forEach(item => item.classList.remove('selected', 'matched'));
+        rightItems.forEach(item => item.classList.remove('selected', 'matched'));
+
+        if (selectedLeft !== null) {
+            leftItems[selectedLeft].classList.add('selected');
+        }
+
+        matches.forEach(match => {
+            leftItems[match.left].classList.add('matched');
+            rightItems[match.right].classList.add('matched');
+        });
+
+        submitBtn.disabled = matches.length !== leftItems.length;
+
+        drawLines();
+
+        pairsInputs.innerHTML = '';
+        matches.forEach((match, index) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = `pairs[]`;
+            input.value = JSON.stringify([match.left, match.right]);
+            pairsInputs.appendChild(input);
+        });
+    }
+
+    leftItems.forEach((item, index) => {
+        item.addEventListener('click', () => {
+            if (!item.classList.contains('matched')) {
+                if (selectedLeft === index) {
+                    selectedLeft = null;
+                } else {
+                    selectedLeft = index;
+                }
+                updateMatches();
+            }
+        });
+    });
+
+    rightItems.forEach((item, index) => {
+        item.addEventListener('click', () => {
+            if (!item.classList.contains('matched') && selectedLeft !== null) {
+                const existingMatchIndex = matches.findIndex(m => m.left === selectedLeft);
+                if (existingMatchIndex !== -1) {
+                    matches.splice(existingMatchIndex, 1);
+                }
+                
+                const rightMatchIndex = matches.findIndex(m => m.right === index);
+                if (rightMatchIndex !== -1) {
+                    matches.splice(rightMatchIndex, 1);
+                }
+                
+                matches.push({ left: selectedLeft, right: index });
+                selectedLeft = null;
+                updateMatches();
+            }
+        });
+    });
+
+    updateMatches();
+    window.addEventListener('resize', drawLines);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <div class="mb-4">
+        <a href="{{ url_for('teacher_dashboard') }}" class="btn btn-outline-primary">
+            <i class="fas fa-arrow-left"></i> Retour au tableau de bord
+        </a>
+    </div>
+
+<style>
+.exercise-container {
+    display: flex;
+    gap: 2rem;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.questions-section {
+    flex: 2;
+}
+
+.words-section {
+    flex: 1;
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
+}
+
+.question-row {
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.answer-input {
+    width: 120px;
+    padding: 0.5rem;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.answer-input:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.words-title {
+    font-weight: bold;
+    margin-bottom: 1rem;
+}
+
+.word-bank {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.word-item {
+    background-color: #ffd700;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.word-item:hover {
+    transform: translateY(-2px);
+}
+
+.submit-btn {
+    display: block;
+    width: 100%;
+    padding: 0.75rem;
+    margin-top: 1rem;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.submit-btn:hover {
+    background-color: #0056b3;
+}
+</style>
+
+{% if content and content.sentences %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>{{ exercise.title }}</h2>
+    {% if current_user.id == exercise.teacher_id %}
+    <div>
+        <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-primary">
+            <i class="fas fa-edit"></i> Modifier
+        </a>
+        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+            <i class="fas fa-trash"></i> Supprimer
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<div class="exercise-container">
+    <div class="questions-section">
+        <form method="POST" action="{{ url_for('submit_exercise_answer', exercise_id=exercise.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% for sentence in content.sentences %}
+            <div class="question-row">
+                <div class="question-text">{{ sentence.text }}</div>
+                <input type="text" class="answer-input"
+                       name="answer_{{ loop.index0 }}" 
+                       required
+                       {% if attempt %}
+                           {% set answers = attempt.answers|from_json %}
+                           value="{{ answers.user_answers['answer_' ~ loop.index0] }}"
+                           disabled
+                       {% endif %}>
+                {% if attempt %}
+                    <div class="feedback">
+                        {% set answers = attempt.answers|from_json %}
+                        {% if answers.user_answers['answer_' ~ loop.index0] == sentence.answer %}
+                            <div class="alert alert-success py-2">
+                                <i class="fas fa-check"></i> Correct !
+                            </div>
+                        {% else %}
+                            <div class="alert alert-danger py-2">
+                                <i class="fas fa-times"></i> Incorrect. La réponse était : {{ sentence.answer }}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+            {% if not attempt %}
+            <button type="submit" class="submit-btn">
+                <i class="fas fa-check"></i> Valider
+            </button>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="words-section">
+        <div class="words-title">Mots disponibles</div>
+        <div class="word-bank">
+            {% if content.available_words %}
+                {% for word in content.available_words %}
+                    <div class="word-item" onclick="selectWord(this)">{{ word }}</div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-warning">Aucun mot disponible</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const words = document.querySelectorAll('.word-item');
+    const inputs = document.querySelectorAll('input[type="text"]');
+    let selectedInput = null;
+
+    function selectWord(word) {
+        if (selectedInput && !selectedInput.disabled) {
+            selectedInput.value = word.textContent.trim();
+            selectedInput.setAttribute('aria-label', `Mot sélectionné : ${word.textContent.trim()}`);
+            
+            // Trouver le prochain champ vide
+            const nextEmptyInput = Array.from(inputs).find(input => !input.value && !input.disabled);
+            if (nextEmptyInput) {
+                nextEmptyInput.focus();
+            }
+        } else {
+            // Si aucun champ n'est sélectionné, focus sur le premier champ vide
+            const firstEmptyInput = Array.from(inputs).find(input => !input.value && !input.disabled);
+            if (firstEmptyInput) {
+                firstEmptyInput.focus();
+            }
+        }
+    }
+
+    // Gestion des événements pour les champs de saisie
+    inputs.forEach(input => {
+        input.addEventListener('focus', function() {
+            selectedInput = this;
+            // Annoncer aux lecteurs d'écran quel champ est sélectionné
+            this.setAttribute('aria-label', `Champ actif : ${this.getAttribute('aria-label')}`);
+        });
+
+        // Permettre d'effacer avec la touche Suppr ou Retour arrière
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (this.value) {
+                    this.value = '';
+                    this.setAttribute('aria-label', 'Champ vidé');
+                }
+            }
+        });
+    });
+
+    // Gestion des événements pour les boutons de mots
+    words.forEach(word => {
+        // Clic souris
+        word.addEventListener('click', function() {
+            selectWord(this);
+        });
+
+        // Support clavier (Entrée et Espace)
+        word.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                selectWord(this);
+            }
+        });
+
+        // Effets visuels au survol
+        ['mouseenter', 'focus'].forEach(event => {
+            word.addEventListener(event, function() {
+                this.style.transform = 'translateY(-2px)';
+            });
+        });
+
+        ['mouseleave', 'blur'].forEach(event => {
+            word.addEventListener(event, function() {
+                this.style.transform = 'translateY(0)';
+            });
+        });
+    });
+});
+</script>
+
+{% endblock %}
+
+<!-- Modal de confirmation de suppression -->
+{% if current_user.is_teacher and current_user.id == exercise.teacher_id %}
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirmer la suppression</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Êtes-vous sûr de vouloir supprimer cet exercice ? Cette action est irréversible.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <form action="{{ url_for('delete_exercise', exercise_id=exercise.id) }}" method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Supprimer</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}

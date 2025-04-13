@@ -1,0 +1,200 @@
+{% if content and content.grid %}
+<div class="word-search-container">
+    <div class="word-grid-container">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Grille de mots mêlés</h5>
+            </div>
+            <div class="card-body">
+                <div class="word-grid" id="wordGrid">
+                    {% for row in content.grid %}
+                    <div class="grid-row">
+                        {% set row_index = loop.index0 %}
+                        {% for letter in row %}
+                        <div class="grid-cell" data-row="{{ row_index }}" data-col="{{ loop.index0 }}">
+                            {{ letter }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="words-list-container">
+        <div class="card words-list-card">
+            <div class="card-header">
+                <h5 class="mb-0">Mots à trouver</h5>
+            </div>
+            <div class="card-body">
+                <div class="words-list">
+                    {% for word in content.words %}
+                        <div class="word-item" data-word="{{ word }}">
+                            <span class="word-text">{{ word }}</span>
+                            <span class="word-found-icon">
+                                <i class="fas fa-check text-success"></i>
+                            </span>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}" id="exerciseForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="exercise_type" value="word_search">
+
+    {% if not attempt %}
+        <div class="text-center mt-4">
+            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
+                <i class="fas fa-check"></i> Valider mes réponses
+            </button>
+        </div>
+    {% endif %}
+</form>
+
+{% if attempt %}
+    <div class="mt-4">
+        <h4>Résultats</h4>
+        {% for word, found in attempt.found_words.items() %}
+            <div class="alert {% if found %}alert-success{% else %}alert-danger{% endif %} mb-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>{{ word }}</div>
+                    <div>
+                        {% if found %}
+                            <i class="fas fa-check text-success"></i> Trouvé !
+                        {% else %}
+                            <i class="fas fa-times text-danger"></i> Non trouvé
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+{% else %}
+<div class="alert alert-warning">
+    Aucune grille n'a été définie pour cet exercice.
+</div>
+{% endif %}
+
+<style>
+.word-search-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.word-grid-container {
+    flex: 2;
+}
+
+.words-list-container {
+    flex: 1;
+    margin-left: 20px;
+}
+
+.word-grid {
+    display: inline-block;
+    border: 2px solid #dee2e6;
+    padding: 1rem;
+    background-color: white;
+    user-select: none;
+    margin: 0 auto;
+}
+
+.grid-row {
+    display: flex;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+}
+
+.grid-cell {
+    width: 35px;
+    height: 35px;
+    border: 1px solid #dee2e6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    margin: 0;
+    padding: 0;
+    background-color: white;
+    position: relative;
+    z-index: 1;
+}
+
+.grid-cell.selected {
+    background-color: #e3f2fd;
+}
+
+.grid-cell.found {
+    background-color: #c8e6c9;
+}
+
+.words-list-card {
+    position: relative;
+    z-index: 0;
+    background-color: white;
+}
+
+.words-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.word-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    background-color: white;
+}
+
+.word-item.found {
+    background-color: #c8e6c9;
+}
+
+.word-found-icon {
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.word-item.found .word-found-icon {
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    .word-search-container {
+        flex-direction: column;
+    }
+    
+    .word-grid-container {
+        margin-bottom: 20px;
+    }
+    
+    .words-list-container {
+        margin-left: 0;
+    }
+    
+    .grid-cell {
+        width: 30px;
+        height: 30px;
+        font-size: 1em;
+    }
+}
+</style>
